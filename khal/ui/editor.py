@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Literal
 
 import urwid
 
+from khal.timezone import localize
 from khal.utils import get_weekday_occurrence, get_wrapped_text
 
 from .calendarwidget import CalendarWidget
@@ -234,16 +235,18 @@ class StartEndEditor(urwid.WidgetWrap):
     @property
     def localize_start(self):
         if getattr(self.startdt, "tzinfo", None) is None:
-            return self.conf["locale"]["default_timezone"].localize
+            timezone = self.conf["locale"]["default_timezone"]
         else:
-            return self.startdt.tzinfo.localize
+            timezone = self.startdt.tzinfo
+        return lambda dtime: localize(dtime, timezone)
 
     @property
     def localize_end(self):
         if getattr(self.enddt, "tzinfo", None) is None:
-            return self.conf["locale"]["default_timezone"].localize
+            timezone = self.conf["locale"]["default_timezone"]
         else:
-            return self.enddt.tzinfo.localize
+            timezone = self.enddt.tzinfo
+        return lambda dtime: localize(dtime, timezone)
 
     @property
     def enddt(self):

@@ -40,7 +40,15 @@ from khal.exceptions import FatalError
 from khal.icalendar import cal_from_ics, delete_instance, invalid_timezone
 from khal.parse_datetime import timedelta2str
 from khal.plugins import FORMATTERS
-from khal.utils import generate_random_uid, is_aware, to_naive_utc, to_unix_time
+from khal.timezone import (
+    convert_to_timezone,
+    from_unix_time,
+    localize,
+    to_naive_utc,
+    to_timezone,
+    to_unix_time,
+)
+from khal.utils import generate_random_uid
 
 logger = logging.getLogger("khal")
 
@@ -143,7 +151,7 @@ class Event:
             if "RECURRENCE-ID" in event:
                 if invalid_timezone(event["RECURRENCE-ID"]):
                     default_timezone = kwargs["locale"]["default_timezone"]
-                    recur_id = default_timezone.localize(event["RECURRENCE-ID"].dt)
+                    recur_id = localize(event["RECURRENCE-ID"].dt, default_timezone)
                     ident = str(to_unix_time(recur_id))
                 else:
                     ident = str(to_unix_time(event["RECURRENCE-ID"].dt))
@@ -275,7 +283,7 @@ class Event:
         if self.ref == "PROTO":
             return self.start
         else:
-            return dt.datetime.fromtimestamp(int(self.ref), pytz.UTC)
+            return from_unix_time(int(self.ref))
 
     def increment_sequence(self) -> None:
         """update the SEQUENCE number, call before saving this event"""
@@ -624,22 +632,23 @@ class Event:
         if isinstance(relative_to_start, dt.datetime):
             relative_to_start = relative_to_start.date()
 
+        local_timezone = self._locale["local_timezone"]
         if isinstance(self.start_local, dt.datetime):
             start_local_datetime = self.start_local
             end_local_datetime = self.end_local
         else:
-            start_local_datetime = self._locale["local_timezone"].localize(
-                dt.datetime.combine(self.start, dt.time.min)
+            start_local_datetime = localize(
+                dt.datetime.combine(self.start, dt.time.min), local_timezone
             )
-            end_local_datetime = self._locale["local_timezone"].localize(
-                dt.datetime.combine(self.end, dt.time.min)
+            end_local_datetime = localize(
+                dt.datetime.combine(self.end, dt.time.min), local_timezone
             )
 
-        day_start = self._locale["local_timezone"].localize(
-            dt.datetime.combine(relative_to_start, dt.time.min),
+        day_start = localize(
+            dt.datetime.combine(relative_to_start, dt.time.min), local_timezone
         )
-        day_end = self._locale["local_timezone"].localize(
-            dt.datetime.combine(relative_to_end, dt.time.max),
+        day_end = localize(
+            dt.datetime.combine(relative_to_end, dt.time.max), local_timezone
         )
         next_day_start = day_start + dt.timedelta(days=1)
 
@@ -881,29 +890,22 @@ class LocalizedEvent(DatetimeEvent):
         if endtz is None:
             endtz = self._locale["default_timezone"]
 
-        if is_aware(self._start):
-            self._start = self._start.astimezone(starttz)
-        else:
-            self._start = starttz.localize(self._start)
-
-        if is_aware(self._end):
-            self._end = self._end.astimezone(endtz)
-        else:
-            self._end = endtz.localize(self._end)
+        self._start = convert_to_timezone(self._start, starttz)
+        self._end = convert_to_timezone(self._end, endtz)
 
     @property
     def start_local(self) -> dt.datetime:
         """
         see parent
         """
-        return self.start.astimezone(self._locale["local_timezone"])
+        return to_timezone(self.start, self._locale["local_timezone"])
 
     @property
     def end_local(self) -> dt.datetime:
         """
         see parent
         """
-        return self.end.astimezone(self._locale["local_timezone"])
+        return to_timezone(self.end, self._locale["local_timezone"])
 
 
 class FloatingEvent(DatetimeEvent):
@@ -913,11 +915,11 @@ class FloatingEvent(DatetimeEvent):
 
     @property
     def start_local(self) -> dt.datetime:
-        return self._locale["local_timezone"].localize(self.start)
+        return localize(self.start, self._locale["local_timezone"])
 
     @property
     def end_local(self) -> dt.datetime:
-        return self._locale["local_timezone"].localize(self.end)
+        return localize(self.end, self._locale["local_timezone"])
 
 
 class AllDayEvent(Event):

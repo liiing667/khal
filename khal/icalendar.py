@@ -32,7 +32,8 @@ import pytz
 
 from .exceptions import UnsupportedRecurrence
 from .parse_datetime import rrulefstr
-from .utils import generate_random_uid, localize_strip_tz, str2alarm, to_unix_time
+from .timezone import localize, localize_strip_tz, to_naive, to_unix_time
+from .utils import generate_random_uid, str2alarm
 
 logger = logging.getLogger("khal")
 
@@ -119,8 +120,8 @@ def new_vevent(
     if not allday and timezone is not None:
         assert isinstance(dtstart, dt.datetime)
         assert isinstance(dtend, dt.datetime)
-        dtstart = timezone.localize(dtstart)
-        dtend = timezone.localize(dtend)
+        dtstart = localize(dtstart, timezone)
+        dtend = localize(dtend, timezone)
 
     event = icalendar.Event()
     event.add("dtstart", dtstart)
@@ -257,7 +258,7 @@ def expand(
         if allday and isinstance(date, dt.datetime):
             date = date.date()
         if events_tz is not None:
-            date = events_tz.localize(date)
+            date = localize(date, events_tz)
         return date
 
     rrule_param = vevent.get("RRULE")
@@ -294,7 +295,7 @@ def expand(
             if events_tz and "Z" in rrule_param.to_ical().decode():
                 assert isinstance(rrule._until, dt.datetime)  # type: ignore
                 rrule._until = (  # type: ignore
-                    pytz.UTC.localize(rrule._until).astimezone(events_tz).replace(tzinfo=None)  # type: ignore
+                    to_naive(localize(rrule._until, pytz.UTC), events_tz)  # type: ignore
                 )
 
             # rrule._until and dtstart could be dt.date or dt.datetime. They
@@ -402,7 +403,7 @@ def sanitize(
     for prop in ["DTSTART", "DTEND", "DUE", "RECURRENCE-ID"]:
         if prop in vevent and invalid_timezone(vevent[prop]):
             timezone = vevent[prop].params.get("TZID")
-            value = default_timezone.localize(vevent.pop(prop).dt)
+            value = localize(vevent.pop(prop).dt, default_timezone)
             vevent.add(prop, value)
             logger.warning(
                 f"{prop} localized in invalid or incomprehensible timezone "
@@ -435,12 +436,12 @@ def sanitize_timerange(dtstart, dtend, duration=None):
             logger.warning(
                 "Event end time has no timezone. Assuming it's the same timezone as the start time"
             )
-            dtend = dtstart.tzinfo.localize(dtend)
+            dtend = localize(dtend, dtstart.tzinfo)
         if not dtstart.tzinfo and dtend.tzinfo:
             logger.warning(
                 "Event start time has no timezone. Assuming it's the same timezone as the end time"
             )
-            dtstart = dtend.tzinfo.localize(dtstart)
+            dtstart = localize(dtstart, dtend.tzinfo)
     if dtend is not None and type(dtstart) is not type(dtend):
         raise ValueError(
             "The event's end time (DTEND) and start time (DTSTART) are not of the same type."

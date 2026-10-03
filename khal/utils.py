@@ -26,17 +26,22 @@ import json
 import random
 import re
 import string
-from calendar import month_abbr, timegm
+from calendar import month_abbr
 from collections.abc import Iterator
 from textwrap import wrap
 
 import icalendar
-import pytz
 import urwid
 from click import style
 
 from .parse_datetime import guesstimedeltafstr
 from .terminal import get_color
+from .timezone import (  # noqa: F401  (re-exported for backwards compatibility)
+    is_aware,
+    localize_strip_tz,
+    to_naive_utc,
+    to_unix_time,
+)
 
 
 def generate_random_uid() -> str:
@@ -118,40 +123,6 @@ def get_month_abbr_len() -> int:
     abbreviated name. It depends on the locale.
     """
     return max(len(month_abbr[i]) for i in range(1, 13)) + 1
-
-
-def localize_strip_tz(dates: list[dt.datetime], timezone: dt.tzinfo) -> Iterator[dt.datetime]:
-    """converts a list of dates to timezone, than removes tz info"""
-    for one_date in dates:
-        if getattr(one_date, "tzinfo", None) is not None:
-            one_date = one_date.astimezone(timezone)
-            one_date = one_date.replace(tzinfo=None)
-        yield one_date
-
-
-def to_unix_time(dtime: dt.datetime) -> float:
-    """convert a datetime object to unix time in UTC (as a float)"""
-    if getattr(dtime, "tzinfo", None) is not None:
-        dtime = dtime.astimezone(pytz.UTC)
-    unix_time = timegm(dtime.timetuple())
-    return unix_time
-
-
-def to_naive_utc(dtime: dt.datetime) -> dt.datetime:
-    """convert a datetime object to UTC and than remove the tzinfo, if
-    datetime is naive already, return it
-    """
-    if not hasattr(dtime, "tzinfo") or dtime.tzinfo is None:
-        return dtime
-
-    dtime_utc = dtime.astimezone(pytz.UTC)
-    dtime_naive = dtime_utc.replace(tzinfo=None)
-    return dtime_naive
-
-
-def is_aware(dtime: dt.datetime) -> bool:
-    """test if a datetime instance is timezone aware"""
-    return bool(dtime.tzinfo is not None and dtime.tzinfo.utcoffset(dtime) is not None)
 
 
 def relative_timedelta_str(day: dt.date) -> str:

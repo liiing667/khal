@@ -35,6 +35,7 @@ from collections.abc import Iterable
 
 from khal.custom_types import CalendarConfiguration, EventCreationTypes, LocaleConfiguration
 from khal.icalendar import new_vevent
+from khal.timezone import localize
 
 from . import backend
 from .event import Event
@@ -157,17 +158,21 @@ class CalendarCollection:
         start = dt.datetime.combine(day, dt.time.min)
         end = dt.datetime.combine(day, dt.time.max)
         floating_events = self.get_floating(start, end)
-        localize = self._locale["local_timezone"].localize
-        localized_events = self.get_localized(localize(start), localize(end))
+        local_timezone = self._locale["local_timezone"]
+        localized_events = self.get_localized(
+            localize(start, local_timezone), localize(end, local_timezone)
+        )
         return itertools.chain(localized_events, floating_events)
 
     def get_calendars_on(self, day: dt.date) -> list[str]:
         start = dt.datetime.combine(day, dt.time.min)
         end = dt.datetime.combine(day, dt.time.max)
-        localize = self._locale["local_timezone"].localize
+        local_timezone = self._locale["local_timezone"]
         calendars = itertools.chain(
             self._backend.get_floating_calendars(start, end),
-            self._backend.get_localized_calendars(localize(start), localize(end)),
+            self._backend.get_localized_calendars(
+                localize(start, local_timezone), localize(end, local_timezone)
+            ),
         )
         return list(set(calendars))
 

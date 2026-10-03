@@ -50,6 +50,7 @@ from .icalendar import sort_key as sort_vevent_key
 from .khalendar.vdir import Item
 from .parse_datetime import timedelta2str
 from .terminal import merge_columns
+from .timezone import localize, now_in_timezone
 from .utils import human_formatter, json_formatter
 
 logger = logging.getLogger("khal")
@@ -207,11 +208,8 @@ def get_events_between(
         env = {}
     assert start
     assert end
-    start_local = locale["local_timezone"].localize(start)
-    end_local = locale["local_timezone"].localize(end)
-
-    start = start_local.replace(tzinfo=None)
-    end = end_local.replace(tzinfo=None)
+    start_local = localize(start, locale["local_timezone"])
+    end_local = localize(end, locale["local_timezone"])
 
     events = sorted(collection.get_localized(start_local, end_local))
     events_float = sorted(collection.get_floating(start, end))
@@ -307,7 +305,7 @@ def khal_list(
     if env is None:
         env = {}
 
-    original_start = conf["locale"]["local_timezone"].localize(start)
+    original_start = localize(start, conf["locale"]["local_timezone"])
     while start < end:
         if start.date() == end.date():
             day_end = end
@@ -581,8 +579,8 @@ def edit_event(event, collection, locale, allow_quit=False, width=80):
             try:
                 start, end, allday = parse_datetime.guessrangefstr(ansi.sub("", value), locale)
                 if not allday:
-                    start = locale["local_timezone"].localize(start)
-                    end = locale["local_timezone"].localize(end)
+                    start = localize(start, locale["local_timezone"])
+                    end = localize(end, locale["local_timezone"])
                 event.update_start_end(start, end)
                 edited = True
             except Exception:
@@ -654,7 +652,7 @@ def edit(collection, search_string, locale, format=None, allow_past=False, conf=
             format = conf["view"]["event_format"]
 
     term_width, _ = get_terminal_size()
-    now = conf["locale"]["local_timezone"].localize(dt.datetime.now())
+    now = now_in_timezone(conf["locale"]["local_timezone"])
 
     events = sorted(collection.search(search_string))
     for event in events:

@@ -33,15 +33,14 @@ from typing import Any
 
 import icalendar
 import icalendar.cal
-import pytz
 from dateutil import parser
 
-from khal import utils
 from khal.custom_types import EventTuple, LocaleConfiguration
 from khal.icalendar import assert_only_one_uid, cal_from_ics
 from khal.icalendar import expand as expand_vevent
 from khal.icalendar import sanitize as sanitize_vevent
 from khal.icalendar import sort_key as sort_vevent_key
+from khal.timezone import from_unix_time, from_unix_time_naive, to_unix_time
 
 from .exceptions import CouldNotCreateDbDir, NonUniqueUID, OutdatedDbVersionError, UpdateFailed
 
@@ -381,14 +380,14 @@ class SQLiteDb:
 
         for dtstart, dtend in dtstartend:
             if dtype == EventType.DATE:
-                dbstart = utils.to_unix_time(dtstart)
-                dbend = utils.to_unix_time(dtend)
+                dbstart = to_unix_time(dtstart)
+                dbend = to_unix_time(dtend)
             else:
-                dbstart = utils.to_unix_time(dtstart)
-                dbend = utils.to_unix_time(dtend)
+                dbstart = to_unix_time(dtstart)
+                dbend = to_unix_time(dtend)
 
             if rec_id is not None:
-                ref = rec_inst = str(utils.to_unix_time(rec_id.dt))
+                ref = rec_inst = str(to_unix_time(rec_id.dt))
             else:
                 rec_inst = str(dbstart)
                 ref = PROTO
@@ -488,8 +487,8 @@ class SQLiteDb:
     def get_localized_calendars(self, start: dt.datetime, end: dt.datetime) -> Iterable[str]:
         assert start.tzinfo is not None
         assert end.tzinfo is not None
-        start_u = utils.to_unix_time(start)
-        end_u = utils.to_unix_time(end)
+        start_u = to_unix_time(start)
+        end_u = to_unix_time(end)
         sql_s = (
             "SELECT events.calendar FROM "
             "recs_loc JOIN events ON "
@@ -508,8 +507,8 @@ class SQLiteDb:
     def get_localized(self, start: dt.datetime, end: dt.datetime) -> Iterable[EventTuple]:
         assert start.tzinfo is not None
         assert end.tzinfo is not None
-        start_timestamp = utils.to_unix_time(start)
-        end_timestamp = utils.to_unix_time(end)
+        start_timestamp = to_unix_time(start)
+        end_timestamp = to_unix_time(end)
         sql_s = (
             "SELECT item, recs_loc.href, dtstart, dtend, ref, etag, dtype, events.calendar "
             "FROM recs_loc JOIN events ON "
@@ -532,15 +531,15 @@ class SQLiteDb:
         ) + tuple(self.calendars)
         result = self.sql_ex(sql_s, stuple)
         for item, href, start_timestamp, end_timestamp, ref, etag, _dtype, calendar in result:
-            start = dt.datetime.fromtimestamp(start_timestamp, pytz.UTC)
-            end = dt.datetime.fromtimestamp(end_timestamp, pytz.UTC)
+            start = from_unix_time(start_timestamp)
+            end = from_unix_time(end_timestamp)
             yield item, href, start, end, ref, etag, calendar
 
     def get_floating_calendars(self, start: dt.datetime, end: dt.datetime) -> Iterable[str]:
         assert start.tzinfo is None
         assert end.tzinfo is None
-        start_u = utils.to_unix_time(start)
-        end_u = utils.to_unix_time(end)
+        start_u = to_unix_time(start)
+        end_u = to_unix_time(end)
         sql_s = (
             "SELECT events.calendar FROM "
             "recs_float JOIN events ON "
@@ -563,8 +562,8 @@ class SQLiteDb:
         start_dt: dt.datetime | dt.date
         end_dt: dt.datetime | dt.date
 
-        start_u = utils.to_unix_time(start)
-        end_u = utils.to_unix_time(end)
+        start_u = to_unix_time(start)
+        end_u = to_unix_time(end)
         sql_s = (
             "SELECT item, recs_float.href, dtstart, dtend, ref, etag, dtype, events.calendar "
             "FROM recs_float JOIN events ON "
@@ -578,8 +577,8 @@ class SQLiteDb:
         stuple = tuple([start_u, end_u, start_u, end_u, start_u, end_u] + list(self.calendars))  # type: ignore
         result = self.sql_ex(sql_s.format(",".join(["?"] * len(self.calendars))), stuple)
         for item, href, start_s, end_s, ref, etag, dtype, calendar in result:
-            start_dt = dt.datetime.fromtimestamp(start_s, pytz.UTC).replace(tzinfo=None)
-            end_dt = dt.datetime.fromtimestamp(end_s, pytz.UTC).replace(tzinfo=None)
+            start_dt = from_unix_time_naive(start_s)
+            end_dt = from_unix_time_naive(end_s)
             if dtype == EventType.DATE:
                 start_dt = start_dt.date()
                 end_dt = end_dt.date()
@@ -613,8 +612,8 @@ class SQLiteDb:
         stuple = tuple([f"%{search_string}%"] + list(self.calendars))
         result = self.sql_ex(sql_s.format(",".join(["?"] * len(self.calendars))), stuple)
         for item, href, start, end, ref, etag, dtype, calendar in result:
-            start = dt.datetime.fromtimestamp(start, pytz.UTC)
-            end = dt.datetime.fromtimestamp(end, pytz.UTC)
+            start = from_unix_time(start)
+            end = from_unix_time(end)
             if dtype == EventType.DATE:
                 start = start.date()
                 end = end.date()
@@ -630,8 +629,8 @@ class SQLiteDb:
         stuple = tuple([f"%{search_string}%"] + list(self.calendars))
         result = self.sql_ex(sql_s.format(",".join(["?"] * len(self.calendars))), stuple)
         for item, href, start, end, ref, etag, dtype, calendar in result:
-            start = dt.datetime.fromtimestamp(start, pytz.UTC).replace(tzinfo=None)
-            end = dt.datetime.fromtimestamp(end, pytz.UTC).replace(tzinfo=None)
+            start = from_unix_time_naive(start)
+            end = from_unix_time_naive(end)
             if dtype == EventType.DATE:
                 start = start.date()
                 end = end.date()
